@@ -20,7 +20,7 @@
   vars:
     # ⚠️  IMPORTANTE: Cambia esta URL a la de tu repositorio de GitHub
     #     Ejemplo: https://github.com/tunombre/leaderboard.git
-    repo_url: "https://github.com/TU_USUARIO/TU_REPOSITORIO.git"
+    repo_url: "https://github.com/KlausJung011/vagrant_frontend_Vue_backend_fastAPI_Puntajes.git"
 
     app_dir:      /home/vagrant/app
     backend_dir:  "{{ app_dir }}/Proyecto/backend"
