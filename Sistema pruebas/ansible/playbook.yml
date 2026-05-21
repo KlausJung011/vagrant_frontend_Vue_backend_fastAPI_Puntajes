@@ -127,43 +127,56 @@
         chdir: "{{ frontend_dir }}"
 
     # ─── 7. NGINX: proxy reverso ──────────────────────────────────────────────
+
+    # Detener Apache2 en caso de que haya quedado de una provisión anterior
+    # (el playbook original lo instalaba y ocupa el puerto 80)
+    - name: Detener y deshabilitar Apache2 si está instalado
+      shell: |
+        if systemctl is-active --quiet apache2; then
+          systemctl stop apache2
+          systemctl disable apache2
+        fi
+      ignore_errors: yes
+
     - name: Eliminar configuración por defecto de Nginx
       file:
         path:  /etc/nginx/sites-enabled/default
         state: absent
 
-    - name: Crear configuración de Nginx para Leaderboard
-      copy:
-        dest: /etc/nginx/sites-available/leaderboard
-        mode: "0644"
-        content: |
-          server {
-              listen 80;
-              server_name _;
+    - name: Escribir configuración de Nginx para Leaderboard
+      shell: |
+        cat > /etc/nginx/sites-available/leaderboard << 'NGINXCONF'
+        server {
+            listen 80;
+            server_name _;
 
-              # Servir archivos estáticos del frontend (Vue.js compilado)
-              root  {{ frontend_dir }}/dist;
-              index index.html;
+            root /home/vagrant/app/Proyecto/frontend/dist;
+            index index.html;
 
-              location / {
-                  try_files $uri $uri/ /index.html;
-              }
+            location / {
+                try_files $uri $uri/ /index.html;
+            }
 
-              # Proxy al backend FastAPI (rutas /puntajes)
-              location /puntajes {
-                  proxy_pass         http://127.0.0.1:8000/puntajes;
-                  proxy_http_version 1.1;
-                  proxy_set_header   Host              $host;
-                  proxy_set_header   X-Real-IP         $remote_addr;
-                  proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-              }
-          }
+            location /puntajes {
+                proxy_pass         http://127.0.0.1:8000/puntajes;
+                proxy_http_version 1.1;
+                proxy_set_header   Host            $host;
+                proxy_set_header   X-Real-IP       $remote_addr;
+                proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+        }
+        NGINXCONF
 
-    - name: Habilitar sitio Leaderboard en Nginx
-      file:
-        src:   /etc/nginx/sites-available/leaderboard
-        dest:  /etc/nginx/sites-enabled/leaderboard
-        state: link
+    - name: Habilitar sitio Leaderboard en Nginx (symlink)
+      shell: ln -sf /etc/nginx/sites-available/leaderboard /etc/nginx/sites-enabled/leaderboard
+
+    - name: Validar configuración de Nginx
+      shell: nginx -t 2>&1
+      register: nginx_test
+
+    - name: Mostrar resultado de validación de Nginx
+      debug:
+        msg: "{{ nginx_test.stdout }}"
 
     - name: Reiniciar y habilitar Nginx
       service:
