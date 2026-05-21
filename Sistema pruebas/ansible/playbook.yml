@@ -126,6 +126,14 @@
       args:
         chdir: "{{ frontend_dir }}"
 
+    - name: Dar permisos de lectura a Nginx sobre el frontend
+      # Nginx corre como www-data. /home/vagrant tiene permisos 700 por defecto,
+      # lo que impide que www-data traverse el directorio → error 500.
+      # o+x en home/vagrant = permite entrar, o+rX en dist/ = permite leer archivos.
+      shell: |
+        chmod o+x /home/vagrant
+        chmod -R o+rX {{ app_dir }}/Proyecto/frontend/dist
+
     # ─── 7. NGINX: proxy reverso ──────────────────────────────────────────────
 
     # Detener Apache2 en caso de que haya quedado de una provisión anterior
