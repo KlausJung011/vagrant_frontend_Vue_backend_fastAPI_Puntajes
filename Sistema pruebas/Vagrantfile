@@ -1,0 +1,46 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# ===========================================================================
+#  Vagrantfile — Leaderboard (FastAPI + Vue.js)
+#  VM: Ubuntu 24.04 LTS | Proveedor: VirtualBox
+#  Provisión: Ansible Local (se instala y ejecuta dentro de la VM)
+# ===========================================================================
+
+Vagrant.configure("2") do |config|
+
+  # ── Box ──────────────────────────────────────────────────────────────────
+  config.vm.box         = "bento/ubuntu-24.04"
+  config.vm.box_version = "202510.26.0"
+
+  # ── Red ──────────────────────────────────────────────────────────────────
+  # Frontend (Nginx) → abre http://localhost:8080 en tu navegador
+  config.vm.network "forwarded_port", guest: 80,   host: 8080
+
+  # Backend (FastAPI) → http://localhost:8001/puntajes  [debug / Swagger UI]
+  config.vm.network "forwarded_port", guest: 8000, host: 8001
+
+  # IP privada: permite VS Code Remote SSH y acceso directo desde el host
+  config.vm.network "private_network", ip: "192.168.33.10"
+
+  # ── Carpeta compartida ────────────────────────────────────────────────────
+  # El directorio "Sistema pruebas/" queda en /vagrant dentro de la VM.
+  # Ansible lo usa para leer el playbook sin necesidad de GitHub.
+  config.vm.synced_folder ".", "/vagrant"
+
+  # ── Proveedor VirtualBox ──────────────────────────────────────────────────
+  config.vm.provider "virtualbox" do |vb|
+    vb.name   = "leaderboard-vm"
+    vb.memory = "1024"   # MB de RAM
+    vb.cpus   = 1
+  end
+
+  # ── Provisión: Ansible Local ──────────────────────────────────────────────
+  # Vagrant instala Ansible dentro de la VM y ejecuta el playbook.
+  # No necesitas tener Ansible instalado en tu PC Windows.
+  config.vm.provision "ansible_local" do |ansible|
+    ansible.playbook = "ansible/playbook.yml"
+    ansible.verbose  = "v"   # muestra detalles de cada tarea
+  end
+
+end

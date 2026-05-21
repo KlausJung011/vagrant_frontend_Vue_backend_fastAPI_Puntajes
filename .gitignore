@@ -1,0 +1,27 @@
+# Dependencias de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+venv/
+.venv/
+*.egg-info/
+
+# Dependencias de Node / Vite
+node_modules/
+dist/
+.vite/
+
+# Vagrant
+.vagrant/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# VS Code
+.vscode/settings.json

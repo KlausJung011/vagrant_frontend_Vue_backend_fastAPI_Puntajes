@@ -1,0 +1,196 @@
+---
+# =============================================================================
+#  Playbook: Desplegar Leaderboard (FastAPI + Vue.js + Nginx)
+#  Proyecto de Sistemas 2 — Pre-producción con Vagrant + Ansible
+#
+#  Qué hace este playbook:
+#    1. Instala Python 3, pip, venv, Node.js 20, Nginx y Git
+#    2. Clona el repositorio desde GitHub
+#    3. Instala dependencias del backend en un entorno virtual Python
+#    4. Registra FastAPI como servicio systemd (arranque automático)
+#    5. Compila el frontend Vue.js con Vite (npm run build)
+#    6. Configura Nginx como servidor web y proxy reverso al backend
+#    7. Asegura que SSH esté activo (para VS Code Remote SSH — punto extra)
+# =============================================================================
+
+- name: Desplegar Leaderboard
+  hosts: all
+  become: true   # ejecutar tareas como root / sudo
+
+  vars:
+    # ⚠️  IMPORTANTE: Cambia esta URL a la de tu repositorio de GitHub
+    #     Ejemplo: https://github.com/tunombre/leaderboard.git
+    repo_url: "https://github.com/TU_USUARIO/TU_REPOSITORIO.git"
+
+    app_dir:      /home/vagrant/app
+    backend_dir:  "{{ app_dir }}/Proyecto/backend"
+    frontend_dir: "{{ app_dir }}/Proyecto/frontend"
+    venv_dir:     "{{ app_dir }}/venv"
+
+  tasks:
+
+    # ─── 1. SISTEMA ──────────────────────────────────────────────────────────
+    - name: Actualizar caché de APT
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Instalar dependencias del sistema (git, python3, nginx, curl)
+      apt:
+        name:
+          - git
+          - python3
+          - python3-pip
+          - python3-venv
+          - nginx
+          - curl
+        state: present
+
+    # ─── 2. NODE.JS 20 ───────────────────────────────────────────────────────
+    - name: Agregar repositorio oficial de Node.js 20 (NodeSource)
+      shell: curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Instalar Node.js 20
+      apt:
+        name: nodejs
+        state: present
+        update_cache: yes
+
+    # ─── 3. REPOSITORIO ──────────────────────────────────────────────────────
+    - name: Clonar repositorio desde GitHub
+      git:
+        repo:   "{{ repo_url }}"
+        dest:   "{{ app_dir }}"
+        update: yes
+        force:  yes
+
+    - name: Asignar permisos al directorio de la aplicación
+      file:
+        path:    "{{ app_dir }}"
+        owner:   vagrant
+        group:   vagrant
+        recurse: yes
+
+    # ─── 4. BACKEND: entorno virtual Python + FastAPI ────────────────────────
+    - name: Crear entorno virtual de Python
+      become_user: vagrant
+      command: python3 -m venv {{ venv_dir }}
+      args:
+        creates: "{{ venv_dir }}/bin/python"
+
+    - name: Instalar dependencias del backend (FastAPI + Uvicorn)
+      become_user: vagrant
+      pip:
+        requirements: "{{ backend_dir }}/requirements.txt"
+        virtualenv:   "{{ venv_dir }}"
+
+    - name: Crear puntajes.json si no existe (base de datos vacía)
+      copy:
+        content: "[]"
+        dest:    "{{ backend_dir }}/puntajes.json"
+        force:   no          # no sobreescribir si ya tiene datos
+        owner:   vagrant
+        group:   vagrant
+        mode:    "0664"
+
+    # ─── 5. BACKEND: servicio systemd ────────────────────────────────────────
+    - name: Crear servicio systemd para FastAPI
+      copy:
+        dest: /etc/systemd/system/leaderboard.service
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Leaderboard FastAPI Backend
+          After=network.target
+
+          [Service]
+          User=vagrant
+          WorkingDirectory={{ backend_dir }}
+          ExecStart={{ venv_dir }}/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+          Restart=always
+          RestartSec=3
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Recargar systemd para reconocer el nuevo servicio
+      systemd:
+        daemon_reload: yes
+
+    - name: Habilitar y arrancar FastAPI
+      systemd:
+        name:    leaderboard
+        state:   started
+        enabled: yes
+
+    # ─── 6. FRONTEND: compilar con Vite ──────────────────────────────────────
+    - name: Instalar dependencias npm del frontend
+      become_user: vagrant
+      npm:
+        path:  "{{ frontend_dir }}"
+        state: present
+
+    - name: Compilar el frontend (npm run build → genera dist/)
+      become_user: vagrant
+      command: npm run build
+      args:
+        chdir: "{{ frontend_dir }}"
+
+    # ─── 7. NGINX: proxy reverso ──────────────────────────────────────────────
+    - name: Eliminar configuración por defecto de Nginx
+      file:
+        path:  /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Crear configuración de Nginx para Leaderboard
+      copy:
+        dest: /etc/nginx/sites-available/leaderboard
+        mode: "0644"
+        content: |
+          server {
+              listen 80;
+              server_name _;
+
+              # Servir archivos estáticos del frontend (Vue.js compilado)
+              root  {{ frontend_dir }}/dist;
+              index index.html;
+
+              location / {
+                  try_files $uri $uri/ /index.html;
+              }
+
+              # Proxy al backend FastAPI (rutas /puntajes)
+              location /puntajes {
+                  proxy_pass         http://127.0.0.1:8000/puntajes;
+                  proxy_http_version 1.1;
+                  proxy_set_header   Host              $host;
+                  proxy_set_header   X-Real-IP         $remote_addr;
+                  proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+              }
+          }
+
+    - name: Habilitar sitio Leaderboard en Nginx
+      file:
+        src:   /etc/nginx/sites-available/leaderboard
+        dest:  /etc/nginx/sites-enabled/leaderboard
+        state: link
+
+    - name: Reiniciar y habilitar Nginx
+      service:
+        name:    nginx
+        state:   restarted
+        enabled: yes
+
+    # ─── 8. EXTRA: SSH activo para VS Code Remote ─────────────────────────────
+    - name: Asegurar que OpenSSH está instalado (VS Code Remote SSH)
+      apt:
+        name:  openssh-server
+        state: present
+
+    - name: Asegurar que SSH está activo y habilitado al inicio
+      service:
+        name:    ssh
+        state:   started
+        enabled: yes

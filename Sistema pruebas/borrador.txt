@@ -1,0 +1,9 @@
+Crear un entorno de pre producción con las siguientes características.
+- instalar lo necesario para implementar Frameworks de su preferencia para frontend
+- instalar lo necesario para implementar Frameworks de backend de su preferencia.
+- Hacer cambios mínimos a las instalaciones por defecto dentro de ambos frameworks 
+- conectar con una base de datos JSON dentro del servidor 
+Puntos extra:
+- conectarse al servidor a través de VS code de forma remota
+
+Toda la práctica debe ser realizada en código basado en vagrant, ansible y scripts.
