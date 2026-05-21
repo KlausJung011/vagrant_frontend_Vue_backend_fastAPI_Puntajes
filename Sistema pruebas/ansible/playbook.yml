@@ -18,8 +18,6 @@
   become: true   # ejecutar tareas como root / sudo
 
   vars:
-    # ⚠️  IMPORTANTE: Cambia esta URL a la de tu repositorio de GitHub
-    #     Ejemplo: https://github.com/tunombre/leaderboard.git
     repo_url: "https://github.com/KlausJung011/vagrant_frontend_Vue_backend_fastAPI_Puntajes.git"
 
     app_dir:      /home/vagrant/app
@@ -29,7 +27,7 @@
 
   tasks:
 
-    # ─── 1. SISTEMA ──────────────────────────────────────────────────────────
+    # ─── 1. SISTEMA ───
     - name: Actualizar caché de APT
       apt:
         update_cache: yes
@@ -128,9 +126,9 @@
     # ─── 6. FRONTEND: compilar con Vite ──────────────────────────────────────
     - name: Instalar dependencias npm del frontend
       become_user: vagrant
-      npm:
-        path:  "{{ frontend_dir }}"
-        state: present
+      command: npm install
+      args:
+        chdir: "{{ frontend_dir }}"
 
     - name: Compilar el frontend (npm run build → genera dist/)
       become_user: vagrant
