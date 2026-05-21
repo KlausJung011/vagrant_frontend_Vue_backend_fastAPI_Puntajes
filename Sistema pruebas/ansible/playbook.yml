@@ -33,7 +33,7 @@
         update_cache: yes
         cache_valid_time: 3600
 
-    - name: Instalar dependencias del sistema (git, python3, nginx, curl)
+    - name: Instalar dependencias del sistema (git, python3, nginx, curl, nodejs, npm)
       apt:
         name:
           - git
@@ -42,19 +42,9 @@
           - python3-venv
           - nginx
           - curl
+          - nodejs   # Node.js 18 LTS incluido en Ubuntu 24.04
+          - npm      # gestor de paquetes de Node.js
         state: present
-
-    # ─── 2. NODE.JS 20 ───────────────────────────────────────────────────────
-    - name: Agregar repositorio oficial de Node.js 20 (NodeSource)
-      shell: curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-      args:
-        creates: /etc/apt/sources.list.d/nodesource.list
-
-    - name: Instalar Node.js 20
-      apt:
-        name: nodejs
-        state: present
-        update_cache: yes
 
     # ─── 3. REPOSITORIO ──────────────────────────────────────────────────────
     - name: Clonar repositorio desde GitHub
@@ -126,13 +116,13 @@
     # ─── 6. FRONTEND: compilar con Vite ──────────────────────────────────────
     - name: Instalar dependencias npm del frontend
       become_user: vagrant
-      command: npm install
+      shell: npm install
       args:
         chdir: "{{ frontend_dir }}"
 
     - name: Compilar el frontend (npm run build → genera dist/)
       become_user: vagrant
-      command: npm run build
+      shell: npm run build
       args:
         chdir: "{{ frontend_dir }}"
 
